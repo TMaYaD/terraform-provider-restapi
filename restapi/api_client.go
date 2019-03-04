@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -31,7 +32,7 @@ type api_client struct {
 }
 
 // Make a new api client for RESTful calls
-func NewAPIClient(i_uri string, i_insecure bool, i_username string, i_password string, i_headers map[string]string, i_use_cookies bool, i_timeout int, i_id_attribute string, i_copy_keys []string, i_wro bool, i_cro bool, i_xssi_prefix string, i_debug bool) (*api_client, error) {
+func NewAPIClient(i_uri string, i_insecure bool, i_username string, i_password string, i_headers map[string]string, i_use_cookies bool, cookies []*http.Cookie, i_timeout int, i_id_attribute string, i_copy_keys []string, i_wro bool, i_cro bool, i_xssi_prefix string, i_debug bool) (*api_client, error) {
 	if i_debug {
 		log.Printf("api_client.go: Constructing debug api_client\n")
 	}
@@ -60,6 +61,11 @@ func NewAPIClient(i_uri string, i_insecure bool, i_username string, i_password s
 
 	if i_use_cookies {
 		cookieJar, _ = cookiejar.New(nil)
+		uri, err := url.Parse(i_uri)
+		if err != nil {
+			return nil, err
+		}
+		cookieJar.SetCookies(uri, cookies)
 	}
 
 	client := api_client{

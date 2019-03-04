@@ -1,7 +1,11 @@
 package restapi
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform/helper/validation"
 	"github.com/hashicorp/terraform/terraform"
 )
 
@@ -43,6 +47,42 @@ func Provider() terraform.ResourceProvider {
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("REST_API_USE_COOKIES", nil),
 				Description: "Enable cookie jar to persist session.",
+			},
+			"cookies": &schema.Schema{
+				Type:        schema.TypeSet,
+				Optional:    true,
+				Description: "Seed cookiejar with cookies. yum...",
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": &schema.Schema{
+							Type:        schema.TypeString,
+							Description: "Name",
+							Required:    true,
+						},
+						"value": &schema.Schema{
+							Type:        schema.TypeString,
+							Description: "Value",
+							Required:    true,
+						},
+						"path": &schema.Schema{
+							Type:        schema.TypeString,
+							Description: "Path",
+							Optional:    true,
+						},
+						"domain": &schema.Schema{
+							Type:        schema.TypeString,
+							Description: "Domain",
+							Optional:    true,
+						},
+						"expires": &schema.Schema{
+							Type:         schema.TypeString,
+							Description:  "Expiry Time in RFC3339 format",
+							Optional:     true,
+							ValidateFunc: validation.ValidateRFC3339TimeString,
+						},
+					},
+				},
 			},
 			"timeout": &schema.Schema{
 				Type:        schema.TypeInt,
@@ -119,13 +159,28 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 		}
 	}
 
+	cookieList := d.Get("cookies").(*schema.Set).List()
+	cookies := make([]*http.Cookie, 0)
+	for _, v := range cookieList {
+		_v := v.(map[string]interface{})
+		cookies = append(cookies, &http.Cookie{
+			Name:  _v["name"].(string),
+			Value: _v["value"].(string),
+
+			Path:    _v["path"].(string),
+			Domain:  _v["domain"].(string),
+			Expires: _v["expires"].(time.Time),
+		})
+	}
+
 	client, err := NewAPIClient(
 		d.Get("uri").(string),
 		d.Get("insecure").(bool),
 		d.Get("username").(string),
 		d.Get("password").(string),
 		headers,
-		d.Get("use_cookies").(bool),
+		d.Get("use_cookies").(bool) || len(cookieList) > 0,
+		cookies,
 		d.Get("timeout").(int),
 		d.Get("id_attribute").(string),
 		copy_keys,
@@ -134,5 +189,6 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 		d.Get("xssi_prefix").(string),
 		d.Get("debug").(bool),
 	)
+
 	return client, err
 }
